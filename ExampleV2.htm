@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Login - Soft Minimal</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #08080a; /* Fondo oscuro pero suave */
+            font-family: 'Inter', -apple-system, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* FONDO LAVA: Ahora más suave y difuminado */
+        #webgl-container {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            filter: blur(100px); /* Desenfoque alto para suavizar formas */
+            transform: scale(1.1);
+            pointer-events: none;
+            opacity: 0.7; /* Reducimos la intensidad visual general */
+        }
+
+        #css3d-container {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* FORMULARIO COMPACTO Y ELEGANTE */
+        #login-card {
+            pointer-events: auto; 
+            width: 260px;
+            padding: 40px 30px;
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        h2 { 
+            margin: 0 0 30px 0; 
+            font-weight: 200; 
+            letter-spacing: 3px; 
+            font-size: 14px; 
+            text-transform: uppercase;
+            opacity: 0.6;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 15px; 
+            margin-bottom: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            color: white;
+            outline: none;
+            box-sizing: border-box;
+            font-size: 14px;
+            transition: 0.3s;
+        }
+
+        input:focus { border-color: rgba(255,255,255,0.2); background: rgba(255, 255, 255, 0.08); }
+
+        button {
+            width: 100%;
+            height: 44px;
+            margin-top: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 12px;
+            color: #000;
+            font-weight: 600;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        button:hover:not(.loading) {
+            background: #fff;
+            transform: translateY(-1px);
+        }
+
+        button.loading { background: rgba(255,255,255,0.1); color: transparent; }
+
+        .spinner {
+            display: none;
+            width: 18px; height: 18px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s linear infinite;
+            position: absolute;
+        }
+
+        button.loading .spinner { display: block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .links { margin-top: 25px; font-size: 9px; opacity: 0.3; display: flex; gap: 20px; }
+    </style>
+</head>
+<body>
+
+    <div id="webgl-container"></div>
+    <div id="css3d-container"></div>
+
+    <div id="login-form-html" style="display: none;">
+        <div id="login-card">
+            <h2>Sign In</h2>
+            <input type="text" placeholder="Email" spellcheck="false" />
+            <input type="password" placeholder="Password" />
+            <button id="btn-entrar" onclick="iniciarSesion()">
+                <span id="btn-text">Entrar</span>
+                <div class="spinner"></div>
+            </button>
+            <div class="links">
+                <span>Create account</span>
+                <span>Support</span>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+
+        let scene, camera, renderer, cssRenderer, loginObject, blobs = [];
+        let mouseX = 0, mouseY = 0;
+
+        window.iniciarSesion = function() {
+            const btn = document.getElementById('btn-entrar');
+            btn.classList.add('loading');
+            document.getElementById('btn-text').style.opacity = "0";
+            setTimeout(() => {
+                btn.classList.remove('loading');
+                document.getElementById('btn-text').style.opacity = "1";
+            }, 2500);
+        };
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 3000);
+            camera.position.z = 1000;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(0.5); 
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('webgl-container').appendChild(renderer.domElement);
+
+            cssRenderer = new CSS3DRenderer();
+            cssRenderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('css3d-container').appendChild(cssRenderer.domElement);
+
+            // GEOMETRÍA: Burbujas suaves y con colores sutiles
+            const geo = new THREE.IcosahedronGeometry(1, 8); 
+            for (let i = 0; i < 6; i++) {
+                // Material mate (roughness alta) y sin emisión fuerte
+                const mat = new THREE.MeshStandardMaterial({ 
+                    roughness: 0.8,
+                    metalness: 0.1,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.userData = { 
+                    offset: Math.random() * 500, 
+                    speed: 0.1, 
+                    amp: 250 
+                };
+                mesh.scale.setScalar(200 + Math.random() * 150); 
+                scene.add(mesh);
+                blobs.push(mesh);
+            }
+
+            // Luces suaves para tonos pastel
+            const light1 = new THREE.PointLight(0xffffff, 1.5);
+            light1.position.set(200, 200, 500);
+            scene.add(light1);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+            const element = document.getElementById('login-card');
+            document.body.appendChild(element); 
+            loginObject = new CSS3DObject(element);
+            scene.add(loginObject);
+
+            window.addEventListener('resize', onResize);
+            document.addEventListener('mousemove', e => {
+                mouseX = (e.clientX - window.innerWidth/2) / (window.innerWidth/2);
+                mouseY = (e.clientY - window.innerHeight/2) / (window.innerHeight/2);
+            });
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            cssRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = Date.now() * 0.0005;
+
+            blobs.forEach((b, i) => {
+                const d = b.userData;
+                b.position.x = Math.sin(time * d.speed + d.offset) * d.amp;
+                b.position.y = Math.cos(time * d.speed * 0.7 + d.offset) * d.amp;
+                
+                // Saturación baja (0.4) para colores pastel y sutiles
+                b.material.color.setHSL((time * 0.05 + i/6) % 1, 0.4, 0.6);
+            });
+
+            // Rotación muy sutil
+            loginObject.rotation.y += (mouseX * 0.15 - loginObject.rotation.y) * 0.05;
+            loginObject.rotation.x += (-mouseY * 0.15 - loginObject.rotation.x) * 0.05;
+
+            renderer.render(scene, camera);
+            cssRenderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

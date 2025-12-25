@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-End 3D Login | Three.js & CSS3D</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.02);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --input-bg: rgba(255, 255, 255, 0.05);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #08080a;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Contenedores de Renderizado */
+        #webgl-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            filter: blur(100px);
+            opacity: 0.7;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        #css3d-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+        }
+
+        /* Interfaz de Login */
+        .login-card {
+            width: 260px;
+            padding: 40px 30px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            border-radius: 28px;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            user-select: none;
+            color: white;
+        }
+
+        .login-card h2 {
+            margin: 0;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            font-weight: 200;
+            opacity: 0.6;
+            text-align: center;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        input {
+            background: var(--input-bg);
+            border: 1px solid transparent;
+            border-radius: 12px;
+            padding: 12px 15px;
+            color: white;
+            font-size: 14px;
+            outline: none;
+            transition: border 0.3s ease;
+        }
+
+        input:focus {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        button {
+            height: 44px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 12px;
+            color: black;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.2s active;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        /* Spinner de carga */
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(0,0,0,0.1);
+            border-top: 2px solid black;
+            border-radius: 50%;
+            position: absolute;
+            display: none;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading .btn-text {
+            opacity: 0;
+        }
+
+        .loading .spinner {
+            display: block;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="webgl-container"></div>
+    <div id="css3d-container"></div>
+
+    <div id="login-ui">
+        <div class="login-card">
+            <h2>Acceso</h2>
+            <div class="input-group">
+                <input type="email" placeholder="Email" spellcheck="false">
+                <input type="password" placeholder="Contraseña">
+            </div>
+            <button id="loginBtn">
+                <span class="btn-text">Entrar</span>
+                <div class="spinner"></div>
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+
+        // --- Configuración Inicial ---
+        let scene, camera, renderer, cssRenderer;
+        let spheres = [];
+        let mouseX = 0, mouseY = 0;
+        let targetRotationX = 0, targetRotationY = 0;
+        let loginObject;
+
+        const container = document.getElementById('webgl-container');
+        const cssContainer = document.getElementById('css3d-container');
+
+        function init() {
+            // Escena y Cámara
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 5000);
+            camera.position.z = 1000;
+
+            // Renderizador WebGL (Fondo)
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(0.5); // Optimización y suavizado de texturas
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            // Renderizador CSS3D (Interfaz)
+            cssRenderer = new CSS3DRenderer();
+            cssRenderer.setSize(window.innerWidth, window.innerHeight);
+            cssContainer.appendChild(cssRenderer.domElement);
+
+            // Luces
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            const pointLight = new THREE.PointLight(0xffffff, 1);
+            pointLight.position.set(500, 500, 500);
+            scene.add(pointLight);
+
+            // --- Fondo Soft Lava ---
+            const geometry = new THREE.IcosahedronGeometry(150, 8);
+            for (let i = 0; i < 6; i++) {
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color().setHSL(Math.random(), 0.4, 0.6),
+                    roughness: 0.8,
+                    metalness: 0.1,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                const sphere = new THREE.Mesh(geometry, material);
+                
+                // Posición inicial aleatoria
+                sphere.position.set(
+                    (Math.random() - 0.5) * 800,
+                    (Math.random() - 0.5) * 800,
+                    (Math.random() - 0.5) * 400 - 200
+                );
+                
+                sphere.userData = {
+                    offset: Math.random() * 100,
+                    speed: 0.0005
+                };
+                
+                scene.add(sphere);
+                spheres.push(sphere);
+            }
+
+            // --- Integración de Interfaz CSS3D ---
+            const loginElement = document.getElementById('login-ui');
+            loginObject = new CSS3DObject(loginElement);
+            scene.add(loginObject);
+
+            // Eventos
+            window.addEventListener('resize', onWindowResize);
+            document.addEventListener('mousemove', onMouseMove);
+            
+            // Lógica del botón
+            const btn = document.getElementById('loginBtn');
+            btn.addEventListener('click', () => {
+                btn.classList.add('loading');
+                setTimeout(() => btn.classList.remove('loading'), 3000);
+            });
+
+            animate();
+        }
+
+        function onMouseMove(event) {
+            // Normalizar movimiento del ratón para rotación (rango -0.15 a 0.15 radianes)
+            mouseX = (event.clientX / window.innerWidth) - 0.5;
+            mouseY = (event.clientY / window.innerHeight) - 0.5;
+            
+            targetRotationY = mouseX * 0.3; // Sensibilidad sutil
+            targetRotationX = -mouseY * 0.3;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            cssRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now();
+
+            // Animación de Esferas (Soft Lava)
+            spheres.forEach((s, i) => {
+                const t = (time + s.userData.offset) * s.userData.speed;
+                
+                // Oscilación suave
+                s.position.x += Math.sin(t) * 1.5;
+                s.position.y += Math.cos(t) * 1.5;
+                
+                // Rotación de color HSL
+                const hue = (t * 0.1 + (i / 6)) % 1;
+                s.material.color.setHSL(hue, 0.4, 0.6);
+            });
+
+            // Suavizado (Lerp) de la rotación de la tarjeta
+            if (loginObject) {
+                loginObject.rotation.x += (targetRotationX - loginObject.rotation.x) * 0.05;
+                loginObject.rotation.y += (targetRotationY - loginObject.rotation.y) * 0.05;
+            }
+
+            renderer.render(scene, camera);
+            cssRenderer.render(scene, camera);
+        }
+
+        init();
+    </script>
+</body>
+</html>
